@@ -1,0 +1,32 @@
+<html>
+
+<head>
+	<style>
+		html {
+			font-family: consolas;
+		}
+
+		.error {
+			margin: 8px;
+			padding: 8px;
+			background-color: rgba(0, 0, 0, 0.1);
+		}
+	</style>
+</head>
+
+<body>
+	<h1 style="text-align: center">Resistance Telegram Bot is Running</h1>
+	<div style="display:flex">
+		<input style="flex:3" placeholder='Chat ID or Alias...' id='chatID' type='text'>
+		<button style="margin-left:15px" onclick="location.href = '/edge/'+(document.getElementById('chatID').value)">View Buffer</button>
+	</div>
+	<h2>Errors that have occurred since last restart</h2>
+	{{range .errors}}
+	<div class="error">{{.}} </div>
+	{{else}}
+	<h3>No Errors have occured since last restart ({{ .restarted }})</h3>
+	{{end}}
+
+</body>
+
+</html>
