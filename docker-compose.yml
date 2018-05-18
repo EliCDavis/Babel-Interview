@@ -7,8 +7,6 @@ services:
             - ./my.env
         volumes:
             - ./app:/go/src/github.com/user/myProject/app
-        ports:
-            - 3000:3000
         container_name: babelbot
         command: gin -i run main.go
         env_file:

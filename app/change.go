@@ -1,15 +1,27 @@
 package main
 
 import (
+	"fmt"
 	"math"
 )
 
-// Change is coin representation of a certain amount of USD
+// Change is coin the representation of a certain amount of USD
 type Change struct {
 	Quarters int
 	Dimes    int
 	Nickles  int
 	Pennies  int
+}
+
+func (change Change) String() string {
+	return fmt.Sprintf("%d Quater(s), %d Dime(s), %d Nickle(s), %d Penny(s)", change.Quarters, change.Dimes, change.Nickles, change.Pennies)
+}
+
+func (change *Change) Add(v Change) {
+	change.Quarters += v.Quarters
+	change.Dimes += v.Dimes
+	change.Nickles += v.Nickles
+	change.Pennies += v.Pennies
 }
 
 func NewChange(amount float64) *Change {

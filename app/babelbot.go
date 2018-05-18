@@ -1,77 +1,109 @@
 package main
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
-	"log"
+	"strings"
 	"time"
 
 	"github.com/dghubble/go-twitter/twitter"
 )
 
-type BabelBot struct {
-	twitterClient *twitter.Client
-	database      *sql.DB
+func messageContainsCommand(message string, command string) bool {
+	return len(strings.SplitAfter(message, fmt.Sprintf("/%s", command))) > 1
 }
 
-func (bot BabelBot) CreateChangeWithRecipt(amount float64, message twitter.DirectMessage) (*Change, error) {
-	change := NewChange(amount)
+func getContentFromCommand(message string, command string) string {
+	commands := strings.SplitAfter(message, fmt.Sprintf("/%s", command))
+	if len(commands) > 1 {
+		return strings.TrimSpace(commands[1])
+	}
+	return ""
+}
 
-	_, err := bot.database.Exec(
-		"INSERT INTO receipt (messageId, amount, twitterUserId) VALUES (?, ?, ?)",
-		message.IDStr,
-		amount,
-		message.SenderID,
-	)
+const twitterDateFormat = "Mon Jan 2 15:04:05 -0700 2006"
+
+type BabelBot struct {
+	twitterClient  *twitter.Client
+	database       *sql.DB
+	commands       []BotCommand
+	lastUpdateTime time.Time
+}
+
+func (bot *BabelBot) RespondToNewMessages() error {
+
+	messages, err := bot.getMessages()
 
 	if err != nil {
-		log.Printf("Error saving change: %s\n", err.Error())
-		return nil, err
+		return err
 	}
-	_, _, err = bot.twitterClient.DirectMessages.New(&twitter.DirectMessageNewParams{
-		Text:   fmt.Sprintf("Change:\n%d Quater(s), %d Dimes, %d Nickle(s), %d Penny(s)\n\nRecipt:\n%s", change.Quarters, change.Dimes, change.Nickles, change.Pennies, message.IDStr),
-		UserID: message.SenderID,
-	})
 
-	return change, nil
-}
+	for _, msg := range messages {
+		messageTime, _ := time.Parse(twitterDateFormat, msg.CreatedAt)
 
-func (bot BabelBot) RetrieveRecipt(recipt string, message twitter.DirectMessage) {
-	result, err := bot.database.Query(
-		"SELECT amount, date FROM receipt WHERE messageId=? AND twitterUserId=?",
-		recipt,
-		message.SenderID,
-	)
+		// This is a new message
+		if messageTime.After(bot.lastUpdateTime) {
 
-	if result.Next() {
-		var amount float64
-		var date time.Time
-		err = result.Scan(&amount, &date)
-		if err != nil {
-			log.Printf("Error retrieving: %s\n", err.Error())
-			return
+			bot.lastUpdateTime = messageTime
+			recognizedCommand := false
+
+			// Attempt to find a command that is associated with the user text
+			for _, cmd := range bot.commands {
+				if messageContainsCommand(msg.Text, cmd.Command) {
+					recognizedCommand = true
+
+					_, _, err = bot.twitterClient.DirectMessages.New(&twitter.DirectMessageNewParams{
+						Text:   cmd.Execute(getContentFromCommand(msg.Text, cmd.Command), msg, bot.database),
+						UserID: msg.SenderID,
+					})
+
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			// We didn't recognize the command, let the twitter user know
+			if recognizedCommand == false {
+				_, _, err = bot.twitterClient.DirectMessages.New(&twitter.DirectMessageNewParams{
+					Text:   "unrecognized input, type /help for help",
+					UserID: msg.SenderID,
+				})
+				if err != nil {
+					return err
+				}
+			}
 		}
-
-		log.Println(date)
-
-		change := NewChange(amount)
-		_, _, err = bot.twitterClient.DirectMessages.New(&twitter.DirectMessageNewParams{
-			Text:   fmt.Sprintf("Change:\n%d Quater(s), %d Dimes, %d Nickle(s), %d Penny(s)\n\nRecipt:\n%s", change.Quarters, change.Dimes, change.Nickles, change.Pennies, recipt),
-			UserID: message.SenderID,
-		})
 	}
+
+	return nil
 }
 
-func (bot BabelBot) GetMessages() ([]twitter.DirectMessage, error) {
+func (bot BabelBot) getMessages() ([]twitter.DirectMessage, error) {
 	messages, _, err := bot.twitterClient.DirectMessages.Get(&twitter.DirectMessageGetParams{
 		Count: 50, // 50 is twitter max
 	})
 	return messages, err
 }
 
-func NewBabelBot(twitterClient *twitter.Client, db *sql.DB) *BabelBot {
+func NewBabelBot(commands []BotCommand, twitterClient *twitter.Client, db *sql.DB) *BabelBot {
 	bot := new(BabelBot)
+	bot.commands = append(commands, BotCommand{
+		Command:     "help",
+		Description: "description of all available commands",
+		Example:     "/help",
+		Name:        "Help",
+		Execute: func(contents string, message twitter.DirectMessage, database *sql.DB) string {
+			var buffer bytes.Buffer
+			for _, cmd := range commands {
+				buffer.WriteString(fmt.Sprintf("%s: (/%s)\n%s\nExample: %s\n\n", cmd.Name, cmd.Command, cmd.Description, cmd.Example))
+			}
+			return buffer.String()
+		},
+	})
 	bot.twitterClient = twitterClient
 	bot.database = db
+	bot.lastUpdateTime = time.Now()
 	return bot
 }

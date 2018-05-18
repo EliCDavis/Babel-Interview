@@ -1,5 +1,3 @@
-
-
 CREATE TABLE IF NOT EXISTS `receipt` (
   `messageId` CHAR(20) NOT NULL,
   `amount` DOUBLE NOT NULL,
