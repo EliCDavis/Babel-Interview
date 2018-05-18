@@ -11,11 +11,16 @@ services:
             - 3000:3000
         container_name: babelbot
         command: gin -i run main.go
-        environment:
-            - PORT=6969
         env_file:
             - ./.env
+        networks: 
+            - babelnetwork
     db:
         image: mysql:5.7
         env_file:
             - ./.env
+        networks: 
+            - babelnetwork
+networks: 
+    babelnetwork: 
+        driver: bridge

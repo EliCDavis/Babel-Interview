@@ -1,0 +1,8 @@
+
+
+CREATE TABLE IF NOT EXISTS `receipt` (
+  `messageId` CHAR(20) NOT NULL,
+  `amount` DOUBLE NOT NULL,
+  `date` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `twitterUserId` CHAR(20) NOT NULL,
+  PRIMARY KEY (`messageId`))
